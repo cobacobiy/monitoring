@@ -1,0 +1,158 @@
+services:
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    ports:
+      - "${MONITORING_BIND_IP}:${PROMETHEUS_PORT}:9090"
+      - "${LOCAL_BIND_IP}:${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - alertmanager
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE}
+    container_name: alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "${MONITORING_BIND_IP}:${ALERTMANAGER_PORT}:9093"
+      - "${LOCAL_BIND_IP}:${ALERTMANAGER_PORT}:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets/telegram_bot_token:/run/secrets/telegram_bot_token:ro
+      - alertmanager_data:/alertmanager
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - monitoring
+
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/infrastructure-overview.json
+    ports:
+      - "${MONITORING_BIND_IP}:${GRAFANA_PORT}:3000"
+      - "${LOCAL_BIND_IP}:${GRAFANA_PORT}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - ./grafana/provisioning/datasources/loki.yml:/etc/grafana/provisioning/datasources/loki.yml:ro
+      - ./grafana/provisioning/dashboards/infrastructure.yml:/etc/grafana/provisioning/dashboards/infrastructure.yml:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: ${CADVISOR_IMAGE}
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=10s
+      - --max_housekeeping_interval=15s
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE}
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - monitoring
+
+  loki:
+    image: ${LOKI_IMAGE}
+    container_name: loki
+    user: "10001:10001"
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/loki.yml
+    ports:
+      - "${MONITORING_BIND_IP}:${LOKI_PORT}:3100"
+      - "${LOCAL_BIND_IP}:${LOKI_PORT}:3100"
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - monitoring
+
+  alloy:
+    image: ${ALLOY_IMAGE}
+    container_name: alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    name: monitoring
+
+volumes:
+  prometheus_data:
+    name: prometheus_data
+  alertmanager_data:
+    name: alertmanager_data
+  grafana_data:
+    name: grafana_data
+  loki_data:
+    name: loki_data
+  alloy_data:
+    name: alloy_data

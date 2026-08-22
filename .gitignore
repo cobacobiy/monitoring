@@ -1,0 +1,17 @@
+# Runtime secrets and host-specific settings
+.env
+.env.*
+!.env.example
+secrets/
+
+# Local data and generated files
+data/
+*.log
+*.tmp
+*.bundle
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,38 @@
+groups:
+  - name: host-health
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node exporter tidak dapat diakses"
+          description: "Prometheus gagal mengambil metrik dari {{ $labels.instance }} selama lebih dari 1 menit."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Penggunaan CPU tinggi"
+          description: "CPU pada {{ $labels.instance }} berada di atas 85% selama 5 menit (saat ini {{ $value | printf \"%.1f\" }}%)."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Penggunaan memori tinggi"
+          description: "Memori pada {{ $labels.instance }} berada di atas 90% selama 5 menit (saat ini {{ $value | printf \"%.1f\" }}%)."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"})) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kapasitas disk hampir penuh"
+          description: "Filesystem {{ $labels.mountpoint }} pada {{ $labels.instance }} terpakai lebih dari 90% selama 10 menit (saat ini {{ $value | printf \"%.1f\" }}%)."
