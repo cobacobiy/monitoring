@@ -68,7 +68,7 @@ services:
       - loki
     networks:
       - monitoring
-      - pv-doc
+      - default
 
   cadvisor:
     image: ${CADVISOR_IMAGE}
@@ -145,9 +145,9 @@ services:
 networks:
   monitoring:
     name: monitoring
-  pv-doc:
+  default:
     external: true
-    name: pv-doc
+    name: default
 
 volumes:
   prometheus_data:
